@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Animated Tornado Track with Config</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.1/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script type="module">
+import { mapboxToken, tornadoSpeed, keyframes, points } from './config.js';
+
+mapboxgl.accessToken = mapboxToken;
+
+const markers = {}; // to keep track of active markers
+
+function milesToMeters(miles) {
+  return miles * 1609.34;
+}
+
+function metersToMiles(meters) {
+  return meters / 1609.34;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function interpolateCoords(a, b, t) {
+  return [
+    lerp(a[0], b[0], t),
+    lerp(a[1], b[1], t),
+    lerp(a[2], b[2], t)
+  ];
+}
+
+function haversineDistance([lon1, lat1], [lon2, lat2]) {
+  const R = 6371000; // meters
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a = 
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) *
+    Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function createGeoJSONCircle(center, radiusInMeters, points = 64) {
+  const coords = {
+    latitude: center[1],
+    longitude: center[0]
+  };
+  const km = radiusInMeters / 1000;
+  const ret = [];
+  const distanceX = km / (111.320 * Math.cos(coords.latitude * Math.PI / 180));
+  const distanceY = km / 110.574;
+
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    ret.push([coords.longitude + x, coords.latitude + y]);
+  }
+  ret.push(ret[0]);
+
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [ret]
+      }
+    }]
+  };
+}
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/satellite-streets-v12',
+  center: keyframes[0].slice(0, 2),
+  zoom: 14,
+  pitch: 30
+});
+
+map.on('load', () => {
+  // Static tornado track line
+  map.addSource('tornado-track-line', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: keyframes.map(k => k.slice(0, 2))
+      }
+    }
+  });
+
+  map.addLayer({
+    id: 'tornado-track-layer',
+    type: 'line',
+    source: 'tornado-track-line',
+    paint: {
+      'line-color': 'rgba(0, 0, 0, 0)',
+      'line-width': 2,
+      'line-opacity': 0
+    }
+  });
+
+  // Animated tornado head line
+  map.addSource('tornado-head-line', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: []
+      }
+    }
+  });
+
+  map.addLayer({
+    id: 'tornado-head-layer',
+    type: 'line',
+    source: 'tornado-head-line',
+    paint: {
+      'line-color': 'darkred',
+      'line-width': 4
+    }
+  });
+
+  // Tornado circle fill
+  map.addSource('tornado-circle', {
+    type: 'geojson',
+    data: createGeoJSONCircle(keyframes[0], 0)
+  });
+
+  map.addLayer({
+    id: 'tornado-circle-layer',
+    type: 'fill',
+    source: 'tornado-circle',
+    paint: {
+      'fill-color': '#ff0000',
+      'fill-opacity': 0.6
+    }
+  });
+
+  // Tornado circle border
+  map.addLayer({
+    id: 'tornado-circle-border',
+    type: 'line',
+    source: 'tornado-circle',
+    paint: {
+      'line-color': 'darkred',
+      'line-width': 4
+    }
+  });
+
+  animateTornado(0, []);
+});
+
+function updateMarkers(tornadoPos) {
+  points.forEach(point => {
+    const distMeters = haversineDistance(tornadoPos, point.coordinates);
+    const distMiles = metersToMiles(distMeters);
+    const shouldShow = point.showWhen === 'any' || distMiles <= point.showWhen;
+
+    if (shouldShow && !markers[point.name]) {
+      // Create container for marker + label
+      const el = document.createElement('div');
+      el.className = 'custom-marker';
+      el.style.opacity = '0'; // start transparent for fade-in
+      el.style.transition = 'opacity 1s ease';
+
+      // Marker icon (img)
+      const img = document.createElement('img');
+      img.src = point.icon || 'https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png';
+      img.style.width = '30px';
+      img.style.height = '40px';
+      img.style.display = 'block';
+      img.style.margin = '0 auto';
+      el.appendChild(img);
+
+      // Label (name)
+      const label = document.createElement('div');
+      label.textContent = point.name;
+      label.style.textAlign = 'center';
+      label.style.fontSize = '12px';
+      label.style.fontWeight = 'bold';
+      label.style.color = '#222';
+      label.style.textShadow = '1px 1px 2px white';
+      label.style.marginTop = '2px';
+      el.appendChild(label);
+
+      // Add marker with custom element
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat(point.coordinates)
+        .addTo(map);
+
+      markers[point.name] = marker;
+
+      // Trigger fade-in after a short delay to allow rendering
+      requestAnimationFrame(() => {
+        el.style.opacity = '1';
+      });
+
+    } else if (!shouldShow && markers[point.name]) {
+      // Fade-out before removing
+      const marker = markers[point.name];
+      const el = marker.getElement();
+      el.style.opacity = '0';
+      setTimeout(() => {
+        marker.remove();
+        delete markers[point.name];
+      }, 1000); // matches transition duration
+    }
+  });
+}
+
+
+function animateTornado(index, pathSoFar) {
+  if (index >= keyframes.length - 1) return;
+
+  const start = keyframes[index];
+  const end = keyframes[index + 1];
+
+  const dist = haversineDistance(start, end);
+  const duration = dist / tornadoSpeed;
+  const startTime = performance.now();
+
+  function step(timestamp) {
+    const t = Math.min((timestamp - startTime) / duration, 1);
+    const [lon, lat, diameter] = interpolateCoords(start, end, t);
+    const radius = milesToMeters(diameter) / 2;
+
+    const circle = createGeoJSONCircle([lon, lat], radius);
+    map.getSource('tornado-circle').setData(circle);
+
+    // Camera leads about 10% ahead but capped at 1
+    const offsetT = Math.min(t + 0.1, 1);
+    const [offsetLon, offsetLat] = interpolateCoords(start, end, offsetT);
+    map.panTo([offsetLon, offsetLat]);
+
+    const newPath = [...pathSoFar, [lon, lat]];
+    map.getSource('tornado-head-line').setData({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: newPath
+      }
+    });
+
+    updateMarkers([lon, lat]);
+
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      animateTornado(index + 1, newPath);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+</script>
+</body>
+</html>

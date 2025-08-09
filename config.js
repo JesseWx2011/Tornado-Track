@@ -1,0 +1,52 @@
+// The Example used is here is the Spiritwood, ND EF3 tornado.
+// v1.0 ALPHA
+// ©️ 2025 JesseLikesWeather. Do not redistribute without permission.
+// config.js
+
+export const mapboxToken = 'pk.eyJ1Ijoid2VhdGhlciIsImEiOiJjbHAxbHNjdncwaDhvMmptcno1ZTdqNDJ0In0.iywE3NefjboFg11a11ON0Q';
+
+// Speed of tornado in meters per millisecond (adjust as needed)
+export const tornadoSpeed = 0.21; // 210 m/s approx.
+
+export const points = [
+  {
+    name: "EF1 Damage",
+    coordinates: [-98.42, 46.94],
+    showWhen: "0.5"  // show when the tornado is < 0.2 miles away
+  },
+  {
+    name: "EFU Damage",
+    coordinates: [-98.42, 46.95],
+    showWhen: "0.5"  // show when the tornado is < 0.2 miles away
+  },
+  {
+    name: "EF3 Damage",
+    coordinates: [-98.41671, 46.94984],
+    showWhen: "0.5"  // show when the tornado is < 0.3 miles away
+  }
+];
+
+
+// Tornado keyframes: [longitude, latitude, width in mi.]
+export const keyframes = [
+  [-98.43727433200002, 46.92819062199999, 0.19],
+  [-98.43637310999999, 46.93205907300001, 0.30],
+  [-98.43362652799999, 46.93466719000003, 0.38],
+  [-98.42774712599997, 46.939326317, 0.48],
+  [-98.42100941699999, 46.94611488700002, 0.47],
+  [-98.412383432, 46.95015781699999, 0.56],
+  [-98.40934717200003, 46.95864505399999, 0.56],
+  [-98.40964757900002, 46.96484703099998, 0.57],
+  [-98.41097795500002, 46.96774640899997, 0.56],
+  [-98.41325246800001, 46.97046992399999, 0.49],
+  [-98.41823064800001, 46.974130345, 0.44],
+  [-98.42535459499999, 46.97913739500001, 0.29],
+  [-98.44389402399997, 46.98464167999998, 0.04],
+  [-98.455652828, 46.98680810500003, 0.04],
+  [-98.46751892100002, 46.98748509400001, 0.021],
+  [-98.473226662, 46.986416544, 0.01],
+  [-98.47790443399997, 46.98473316899998, 0.01],
+  [-98.48348342899999, 46.982961908, 0.0003],
+  [-98.48871910100002, 46.982830159, 0.001],
+  [-98.493353958, 46.98304974000001, 0]
+];
