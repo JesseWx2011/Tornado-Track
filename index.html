@@ -1,126 +1,405 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-     
     <meta charset="utf-8" />
-      <title>TornadoTrack</title>
-     
+    <title>TornadoTrack</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-     
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
-     
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet" />
-     
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@700&display=swap" rel="stylesheet">
-      <style>
-        body {
-            margin: 0;
-            padding: 0;
-        }
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.18.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.18.1/mapbox-gl.css" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: 'Rubik', sans-serif; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
 
-        #map {
+        /* --- HUD Overlay Styles (Left Aligned Sidebar) --- */
+        .hud-container {
             position: absolute;
             top: 0;
+            left: 0;
             bottom: 0;
-            width: 100%;
+            width: 350px; /* Fixed width sidebar */
+            padding: 24px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 24px; /* Space between groups */
+            z-index: 100;
         }
 
+        .hud-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .hud-label {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            opacity: 0.8;
+        }
+
+        .hud-value {
+            font-size: 56px;
+            font-weight: bold;
+            line-height: 1.0;
+            color: #fff;
+            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
+            transition: color 0.2s;
+        }
+
+        /* Small Data (Location) */
+        .hud-subdata {
+            font-size: 16px;
+            color: #ddd;
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* Commentary Box */
+        .commentary-box {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-left: 4px solid #fff;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            color: #fff;
+            max-width: 100%;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.5s ease;
+        }
+        .commentary-box.visible { opacity: 1; transform: translateX(0); }
+        .commentary-text { font-size: 18px; line-height: 1.4; font-style: italic; }
+
+        /* Animation classes */
+        .rating-changing { transform: scale(0.9); opacity: 0.7; }
+        .rating-visible { transform: scale(1); opacity: 1; }
+
+        /* Wind speed display */
+        #hud-windspeed {
+            font-size: 28px;
+            color: #ffcc00;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+
+.gpx-marker-container {
+    display: flex;
+    align-items: center;
+    /* Ensure the line starts exactly at the coordinate */
+    pointer-events: none; 
+}
+
+/* The white line connecting the point to the label */
+.gpx-callout-line {
+    width: 40px; /* Length of the callout line */
+    height: 2px;
+    background-color: #ffffff;
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* The Text Box */
+.gpx-label {
+    background: #000000;
+    color: #ffffff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid #ffffff;
+    white-space: nowrap;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+        /* Control Panel (Bottom Slider) - Default Hidden */
         #slider-container {
             position: absolute;
-            left: 24px;
-            bottom: 24px;
-            background: rgba(30, 30, 30, 0.92);
-            padding: 16px 20px;
-            border-radius: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 30px;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px 25px;
+            border-radius: 30px;
             z-index: 10;
             display: flex;
             align-items: center;
-            gap: 18px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-            font-family: 'Rubik', Arial, sans-serif;
+            gap: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            min-width: 400px;
+            transition: opacity 0.3s, transform 0.3s;
+            opacity: 0; 
+            pointer-events: none;
+            transform: translateX(-50%) translateY(20px);
         }
+        #slider-container.show-controls { opacity: 1; pointer-events: all; transform: translateX(-50%) translateY(0); }
 
-        #slider-label {
-            color: #fff;
-            font-size: 16px;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-
-        #slider {
-            width: 320px;
-            accent-color: #d32f2f;
-            height: 6px;
-            border-radius: 3px;
-            margin: 0 8px;
-        }
-
-        #slider-value {
-            color: #fff;
-            font-size: 15px;
-            font-weight: bold;
-            min-width: 40px;
-            text-align: right;
-            margin-left: 8px;
-        }
-
-        #play-btn,
-        #pause-btn,
-        #export-btn {
-            background: #d32f2f;
-            border: none;
-            color: #fff;
-            font-size: 18px;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-right: 4px;
-            position: absolute;
-        }
-
-        #play-btn:hover,
-        #pause-btn:hover,
-        #export-btn:hover {
-            background: #b71c1c;
-        }
-
-        #pause-btn {
-            display: none;
-        }
-
-        .mapboxgl-ctrl,
-        .mapboxgl-ctrl-attrib {
-            display: none;
-        }
+        .controls-left { display: flex; align-items: center; gap: 12px; }
+        .controls-center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        #slider { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); outline: none; -webkit-appearance: none; appearance: none; }
+        #slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; transition: transform 0.1s; }
+        #slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .btn { background: transparent; border: 2px solid rgba(255, 255, 255, 0.8); color: #fff; font-size: 14px; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+        .btn:hover { background: rgba(255, 255, 255, 0.2); }
+        #pause-btn { display: none; }
+        #export-btn { display: none; position: absolute; top: 24px; right: 24px; z-index: 1999; font-size: 20px; }
+        .mapboxgl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-right { display: none !important; }
     </style>
 </head>
 
 <body>
+    <div id="loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #111; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; z-index: 1000;">Loading TornadoTrack...</div>
+
     <div id="map"></div>
-    <button id="export-btn" title="Export as Video">&#x1F4E5;</button>
-    <div id="slider-container" style="display:none;">
-          <button id="play-btn" title="Play">&#9654;</button>
-          <button id="pause-btn" title="Pause">&#10073;&#10073;</button>
-          <span id="slider-label">Tornado Progress</span>
-          <input type="range" id="slider" min="0" max="100" value="0" step="1">
-          <span id="slider-value">0%</span>
+
+    <div id="hud" class="hud-container">
+        <div class="hud-group">
+            <div class="hud-label">Intensity</div>
+            <div id="hud-intensity" class="hud-value rating-visible">EF0</div>
+            <div id="hud-windspeed">0 mph</div>
+        </div>
+
+        <div class="hud-group">
+            <div class="hud-label">Time (CDT)</div>
+            <div id="hud-time" class="hud-value">--:--</div>
+        </div>
+
+        <div class="hud-group">
+            <div class="hud-label">Position</div>
+            <div id="hud-coords" class="hud-subdata">Lat: -- Lon: --</div>
+            <div id="hud-location" class="hud-subdata" style="margin-top:5px; color:#ffdddd;">Locating...</div>
+        </div>
+
+        <div id="commentary-container" class="commentary-box">
+            <div id="commentary-text" class="commentary-text"></div>
+        </div>
     </div>
+
+    <div id="slider-container">
+        <div class="controls-left">
+            <button id="play-btn" class="btn" title="Play">▶</button>
+            <button id="pause-btn" class="btn" title="Pause">⏸</button>
+        </div>
+        <div class="controls-center">
+            <input type="range" id="slider" min="0" max="100" value="0" step="0.1">
+        </div>
+    </div>
+
+    <button id="export-btn" class="btn" title="Export">📥</button>
+
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
     <script type="module">
-        import { mapboxToken, tornadoSpeed, keyframes, points, showAnimationPlayer, tornadoIntensityColors, damageOverlay } from './config.js';
+        import { mapboxToken, tornadoSpeed, keyframes, points, showAnimationPlayer, tornadoIntensityColors, damageOverlay, startTime, endTime, commentary, defaultCommentaryDuration, cities, gpxConfig, kmlConfig, referenceCity } from './config.js';
+
+        // Constants
+        const EARTH_RADIUS_METERS = 6371000;
+        const METERS_PER_MILE = 1609.34;
+        const DEG_TO_RAD = Math.PI / 180;
+        const CIRCLE_POINTS = 64;
 
         mapboxgl.accessToken = mapboxToken;
 
-        const markers = {};
-        const sliderContainer = document.getElementById('slider-container');
-        if (showAnimationPlayer) sliderContainer.style.display = 'flex';
+        // Time objects
+        const startDate = new Date(startTime);
+        const endDate = new Date(endTime);
+        const totalTimeDuration = endDate.getTime() - startDate.getTime();
+        const keyframeTimes = assignTimes(keyframes, startTime, endTime);
 
+        // State
+        const state = {
+            markers: {},
+            isPlaying: false,
+            animationFrame: null,
+            currentTimeMs: startDate.getTime(),
+            totalDistance: 0,
+            lastRating: null,
+            lastMinute: -1,
+            controlsVisible: false,
+            activeCommentaryEnd: 0,
+            gpxData: [],
+            gpxMarker: null,
+            gpxActive: false
+        };
+
+        const elements = {
+            sliderContainer: document.getElementById('slider-container'),
+            slider: document.getElementById('slider'),
+            playBtn: document.getElementById('play-btn'),
+            pauseBtn: document.getElementById('pause-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            hudContainer: document.getElementById('hud'),
+            hudIntensity: document.getElementById('hud-intensity'),
+            hudTime: document.getElementById('hud-time'),
+            hudWindSpeed: document.getElementById('hud-windspeed'),
+            hudCoords: document.getElementById('hud-coords'),
+            hudLocation: document.getElementById('hud-location'),
+            commentaryBox: document.getElementById('commentary-container'),
+            commentaryText: document.getElementById('commentary-text')
+        };
+
+        // Wind speed mapping (mph) for each EF rating
+        const windSpeedMap = {
+            'EF0': '65-85',
+            'EF1': '86-110',
+            'EF2': '111-135',
+            'EF3': '136-165',
+            'EF4': '166-200',
+            'EF5': '200+',
+            'DEFAULT': 'Unknown'
+        };
+
+        // Mathematical utilities
+        const MathUtils = {
+            milesToMeters: (miles) => miles * METERS_PER_MILE,
+            metersToMiles: (meters) => meters / METERS_PER_MILE,
+            lerp: (a, b, t) => a + (b - a) * t,
+            interpolateCoords: (a, b, t) => {
+                if (a.slice(0, 3).some(isNaN) || b.slice(0, 3).some(isNaN)) return [0, 0, 0];
+                return [
+                    MathUtils.lerp(a[0], b[0], t),
+                    MathUtils.lerp(a[1], b[1], t),
+                    MathUtils.lerp(a[2] || 0, b[2] || 0, t)
+                ];
+            },
+            haversineDistance: ([lon1, lat1], [lon2, lat2]) => {
+                const dLat = (lat2 - lat1) * DEG_TO_RAD;
+                const dLon = (lon2 - lon1) * DEG_TO_RAD;
+                const lat1Rad = lat1 * DEG_TO_RAD;
+                const lat2Rad = lat2 * DEG_TO_RAD;
+                const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) ** 2;
+                return 2 * EARTH_RADIUS_METERS * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            },
+            calculateTotalDistance: (keyframes) => {
+                let total = 0;
+                for (let i = 0; i < keyframes.length - 1; i++) {
+                    total += MathUtils.haversineDistance(
+                        keyframes[i].slice(0, 2),
+                        keyframes[i + 1].slice(0, 2)
+                    );
+                }
+                return total;
+            }
+        };
+
+        // Assign times to keyframes
+        function assignTimes(keyframes, startTime, endTime) {
+            const times = new Array(keyframes.length);
+            const startMs = new Date(startTime).getTime();
+            const endMs = new Date(endTime).getTime();
+            const fixedTimes = [];
+            for (let i = 0; i < keyframes.length; i++) {
+                if (keyframes[i].length > 4) {
+                    times[i] = new Date(keyframes[i][4]).getTime();
+                    fixedTimes.push(i);
+                }
+            }
+            fixedTimes.sort((a, b) => times[a] - times[b]);
+            if (fixedTimes.length === 0) {
+                // no fixed, linear
+                for (let i = 0; i < keyframes.length; i++) {
+                    times[i] = startMs + (i / (keyframes.length - 1)) * (endMs - startMs);
+                }
+            } else {
+                // interpolate between fixed
+                times[0] = times[0] || startMs;
+                times[times.length - 1] = times[times.length - 1] || endMs;
+                for (let i = 0; i < fixedTimes.length - 1; i++) {
+                    const startIdx = fixedTimes[i];
+                    const endIdx = fixedTimes[i + 1];
+                    const startT = times[startIdx];
+                    const endT = times[endIdx];
+                    for (let j = startIdx + 1; j < endIdx; j++) {
+                        times[j] = startT + (j - startIdx) / (endIdx - startIdx) * (endT - startT);
+                    }
+                }
+                // before first
+                if (fixedTimes[0] > 0) {
+                    const startT = startMs;
+                    const endT = times[fixedTimes[0]];
+                    for (let j = 0; j < fixedTimes[0]; j++) {
+                        times[j] = startT + (j / fixedTimes[0]) * (endT - startT);
+                    }
+                }
+                // after last
+                if (fixedTimes[fixedTimes.length - 1] < keyframes.length - 1) {
+                    const startT = times[fixedTimes[fixedTimes.length - 1]];
+                    const endT = endMs;
+                    const startIdx = fixedTimes[fixedTimes.length - 1];
+                    const endIdx = keyframes.length - 1;
+                    for (let j = startIdx + 1; j <= endIdx; j++) {
+                        times[j] = startT + (j - startIdx) / (endIdx - startIdx) * (endT - startT);
+                    }
+                }
+            }
+            return times;
+        }
+
+        // Geometry utilities
+        const GeometryUtils = {
+            createGeoJSONCircle: (center, radiusInMeters, pointsNum = CIRCLE_POINTS) => {
+                const [lon, lat] = center;
+                const coords = [];
+                const distanceX = radiusInMeters / (EARTH_RADIUS_METERS * Math.cos(lat * DEG_TO_RAD));
+                const distanceY = radiusInMeters / EARTH_RADIUS_METERS;
+                for (let i = 0; i < pointsNum; i++) {
+                    const theta = (i / pointsNum) * 2 * Math.PI;
+                    coords.push([
+                        lon + (distanceX * Math.cos(theta)) / DEG_TO_RAD,
+                        lat + (distanceY * Math.sin(theta)) / DEG_TO_RAD
+                    ]);
+                }
+                coords.push(coords[0]);
+                return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } }] };
+            },
+            createTornadoSwathPolygon: (kfs) => {
+                if (kfs.length < 2) return turf.polygon([]);
+                const leftPoints = [];
+                const rightPoints = [];
+                
+                for (let i = 0; i < kfs.length; i++) {
+                    const [lon, lat, diameter] = kfs[i];
+                    const halfWidth = diameter / 2;
+                    let bearing;
+                    if (i === 0) {
+                        bearing = turf.bearing(turf.point(kfs[i].slice(0, 2)), turf.point(kfs[i + 1].slice(0, 2)));
+                    } else if (i === kfs.length - 1) {
+                        bearing = turf.bearing(turf.point(kfs[i - 1].slice(0, 2)), turf.point(kfs[i].slice(0, 2)));
+                    } else {
+                        const bearing1 = turf.bearing(turf.point(kfs[i - 1].slice(0, 2)), turf.point(kfs[i].slice(0, 2)));
+                        const bearing2 = turf.bearing(turf.point(kfs[i].slice(0, 2)), turf.point(kfs[i + 1].slice(0, 2)));
+                        bearing = (bearing1 + bearing2) / 2;
+                    }
+                    const left = turf.destination([lon, lat], halfWidth, bearing - 90, { units: 'miles' });
+                    const right = turf.destination([lon, lat], halfWidth, bearing + 90, { units: 'miles' });
+                    leftPoints.push(left.geometry.coordinates);
+                    rightPoints.push(right.geometry.coordinates);
+                }
+
+                // Add rounded start cap
+                const startCenter = kfs[0].slice(0, 2);
+                const startRadius = kfs[0][2] / 2;
+                const startBearing = turf.bearing(turf.point(kfs[0].slice(0, 2)), turf.point(kfs[1].slice(0, 2)));
+                const arcPoints = [];
+                for (let i = 0; i <= 180; i += 10) {
+                    const p = turf.destination(startCenter, startRadius, startBearing - 90 - i, { units: 'miles' });
+                    arcPoints.push(p.geometry.coordinates);
+                }
+
+                const finalCoords = [...arcPoints, ...leftPoints, ...rightPoints.reverse(), arcPoints[0]];
+                return turf.polygon([finalCoords]);
+            }
+        };
+
+        // Initialize map
         const map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/hastytube/cmgciky0800dj01s21q1x2apo',
@@ -128,39 +407,26 @@
             zoom: 12.9,
             pitch: 15,
             preserveDrawingBuffer: true,
-            antialias: true,
-            rastersaturation: 0.3,
+            antialias: true
         });
 
-        let gl;
-        let program;
-        let verticesBuffer;
-        let texture;
+        state.totalDistance = MathUtils.calculateTotalDistance(keyframes);
 
+        // Smooth the track line
+        const trackCoords = keyframes.map(k => k.slice(0, 2));
+        const trackLine = turf.lineString(trackCoords);
+        const smoothedTrack = turf.bezierSpline(trackLine, { resolution: 10000, sharpness: 0.85 });
+
+        // --- Custom Layer (Damage) ---
+        let gl, program, verticesBuffer, texture;
         const customLayer = {
             id: 'damage-reveal',
             type: 'custom',
             renderingMode: '3d',
             onAdd: function (map, glContext) {
                 gl = glContext;
-                const vertexShaderSource = `
-            attribute vec2 a_pos;
-            uniform mat4 u_matrix;
-            varying vec2 v_texCoord;
-            void main() {
-                v_texCoord = a_pos * 0.5 + 0.5;
-                gl_Position = u_matrix * vec4(a_pos.x, a_pos.y, 0.0, 1.0);
-            }
-        `;
-                const fragmentShaderSource = `
-            precision mediump float;
-            uniform sampler2D u_image;
-            varying vec2 v_texCoord;
-            void main() {
-                gl_FragColor = texture2D(u_image, v_texCoord);
-            }
-        `;
-
+                const vertexShaderSource = `attribute vec2 a_pos; uniform mat4 u_matrix; varying vec2 v_texCoord; void main() { v_texCoord = a_pos * 0.5 + 0.5; gl_Position = u_matrix * vec4(a_pos.x, a_pos.y, 0.0, 1.0); }`;
+                const fragmentShaderSource = `precision mediump float; uniform sampler2D u_image; varying vec2 v_texCoord; void main() { gl_FragColor = texture2D(u_image, v_texCoord); }`;
                 program = gl.createProgram();
                 const compileShader = (type, source) => {
                     const shader = gl.createShader(type);
@@ -172,22 +438,15 @@
                 compileShader(gl.VERTEX_SHADER, vertexShaderSource);
                 compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
                 gl.linkProgram(program);
-
                 verticesBuffer = gl.createBuffer();
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
                 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-
-                const a_pos = gl.getAttribLocation(program, 'a_pos');
-                gl.enableVertexAttribArray(a_pos);
-                gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
-
                 texture = gl.createTexture();
                 gl.bindTexture(gl.TEXTURE_2D, texture);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
                 const img = new Image();
                 img.crossOrigin = '';
                 img.onload = () => {
@@ -199,315 +458,622 @@
             },
             render: function (glContext, matrix) {
                 gl.useProgram(program);
-
                 const u_matrix = gl.getUniformLocation(program, 'u_matrix');
                 gl.uniformMatrix4fv(u_matrix, false, matrix);
-
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, texture);
                 gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
-
                 gl.enable(gl.STENCIL_TEST);
-
                 gl.stencilFunc(gl.EQUAL, 1, 0xFF);
                 gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
-
                 gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
                 const a_pos = gl.getAttribLocation(program, 'a_pos');
                 gl.enableVertexAttribArray(a_pos);
                 gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
-
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
                 gl.disable(gl.STENCIL_TEST);
-
                 map.triggerRepaint();
-            },
+            }
         };
 
-        function milesToMeters(miles) { return miles * 1609.34; }
-        function metersToMiles(meters) { return meters / 1609.34; }
-        function lerp(a, b, t) { return a + (b - a) * t; }
-        function interpolateCoords(a, b, t) { return a.slice(0, 3).some(isNaN) || b.slice(0, 3).some(isNaN) ? [0, 0, 0] : [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
-        function haversineDistance([lon1, lat1], [lon2, lat2]) {
-            const R = 6371000, toRad = Math.PI / 180, dLat = (lat2 - lat1) * toRad, dLon = (lon2 - lon1) * toRad;
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
-            return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        }
-        function createGeoJSONCircle(center, radiusInMeters, pointsNum = 64) {
-            const [lon, lat] = center; const coords = [];
-            const distanceX = radiusInMeters / 1000 / (111.320 * Math.cos(lat * Math.PI / 180));
-            const distanceY = radiusInMeters / 1000 / 110.574;
-            for (let i = 0; i < pointsNum; i++) {
-                const theta = (i / pointsNum) * 2 * Math.PI;
-                coords.push([lon + distanceX * Math.cos(theta), lat + distanceY * Math.sin(theta)]);
-            }
-            coords.push(coords[0]);
-            return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } }] };
-        }
+        // --- GPX Handling ---
+state.gpxMarkers = new Map(); 
+state.gpxUnits = new Map();
 
-        function createTornadoSwathPolygon(kfs) {
-            if (kfs.length < 2) return turf.polygon([]);
+async function loadTracks(configs) {
+    for (const config of configs) {
+        if (!config || !config.url) continue;
 
-            const leftPoints = [], rightPoints = [];
-
-            for (let i = 0; i < kfs.length; i++) {
-                const [lon, lat, diameter] = kfs[i];
-                const halfWidth = diameter / 2;
-
-                let bearing;
-                if (i === 0) {
-                    bearing = turf.bearing(turf.point(kfs[i].slice(0, 2)), turf.point(kfs[i + 1].slice(0, 2)));
-                } else if (i === kfs.length - 1) {
-                    bearing = turf.bearing(turf.point(kfs[i - 1].slice(0, 2)), turf.point(kfs[i].slice(0, 2)));
-                } else {
-                    bearing = turf.bearing(turf.point(kfs[i].slice(0, 2)), turf.point(kfs[i + 1].slice(0, 2)));
+        try {
+            const response = await fetch(config.url);
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, "text/xml");
+            
+            let points = [];
+            if (config.url.endsWith('.kml') || config.url.endsWith('.KML')) {
+                // Parse KML
+                const coordinates = xml.querySelector('coordinates');
+                if (coordinates) {
+                    const coordText = coordinates.textContent.trim();
+                    const coordLines = coordText.split(/\s+/);
+                    points = coordLines.map(line => {
+                        const [lon, lat] = line.split(',').map(Number);
+                        return { lat, lon, time: 0 }; // No time in KML, set to 0
+                    });
                 }
-
-                if (i === kfs.length - 1) {
-                    bearing = turf.bearing(turf.point(kfs[i - 1].slice(0, 2)), turf.point(kfs[i].slice(0, 2)));
-                }
-
-                const left = turf.destination([lon, lat], halfWidth, bearing - 90, { units: 'miles' });
-                const right = turf.destination([lon, lat], halfWidth, bearing + 90, { units: 'miles' });
-                leftPoints.push(left.geometry.coordinates);
-                rightPoints.push(right.geometry.coordinates);
+            } else {
+                // Parse GPX
+                points = Array.from(xml.querySelectorAll('trkpt, wpt')).map(pt => ({
+                    lat: parseFloat(pt.getAttribute('lat')),
+                    lon: parseFloat(pt.getAttribute('lon')),
+                    time: new Date(pt.querySelector('time').textContent).getTime()
+                }));
             }
 
-            return turf.polygon([[...leftPoints, ...rightPoints.reverse(), leftPoints[0]]]);
+            // Use a sanitized ID to prevent naming errors
+            const unitId = (config.id || config.name).replace(/\s+/g, '-').toLowerCase();
+            const sourceId = `track-source-${unitId}`;
+            const layerId = `track-layer-${unitId}`;
+
+            map.addSource(sourceId, { 
+                type: 'geojson', 
+                data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } 
+            });
+
+            map.addLayer({
+                id: layerId,
+                type: 'line',
+                source: sourceId,
+                paint: {
+                    'line-color': config.color || '#39FF14',
+                    'line-width': 4,
+                    'line-opacity': 1
+                }
+            });
+
+            const container = document.createElement('div');
+            container.className = 'gpx-marker-container';
+            container.innerHTML = `
+                <div class="gpx-callout-line"></div>
+                <div class="gpx-label" style="border-color: ${config.color || '#ffffff'}">${config.name}</div>
+            `;
+
+            const marker = new mapboxgl.Marker({ element: container, anchor: 'left' })
+                .setLngLat([0, 0])
+                .addTo(map);
+            
+            marker.getElement().style.display = 'none';
+
+            state.gpxUnits.set(unitId, {
+                points,
+                sourceId,
+                layerId,
+                marker,
+                color: config.color || '#39FF14'
+            });
+
+        } catch (e) {
+            console.error(`Error loading track:`, e);
+        }
+    }
+}
+
+function updateGPX(currentTimeMs) {
+    if (!state.gpxUnits) return;
+
+    state.gpxUnits.forEach((unit, unitId) => {
+        const { points, sourceId, layerId, marker, color } = unit;
+        
+        // SAFETY CHECK: If the map style hasn't fully registered the layer, skip this unit for this frame
+        if (!map.getLayer(layerId)) return;
+
+        const visiblePoints = points.filter(p => p.time <= currentTimeMs);
+        const lastDataPoint = points[points.length - 1];
+
+        // 1. END STATE: Grey out and remove callout
+        if (currentTimeMs > lastDataPoint.time) {
+            map.getSource(sourceId).setData({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: points.map(p => [p.lon, p.lat]) }
+            });
+            map.setPaintProperty(layerId, 'line-color', '#555555');
+            map.setPaintProperty(layerId, 'line-opacity', 0.5);
+            marker.getElement().style.display = 'none';
+            return;
         }
 
+        // 2. ACTIVE STATE: Easing
+        if (visiblePoints.length > 0) {
+            // Restore colors in case of rewind
+            map.setPaintProperty(layerId, 'line-color', color);
+            map.setPaintProperty(layerId, 'line-opacity', 1);
 
-        map.on('load', () => {
+            const prevPt = visiblePoints[visiblePoints.length - 1];
+            const prevIdx = points.indexOf(prevPt);
+            let currentPos = [prevPt.lon, prevPt.lat];
+
+            if (prevIdx < points.length - 1) {
+                const nextPt = points[prevIdx + 1];
+                const t = Math.max(0, Math.min(1, (currentTimeMs - prevPt.time) / (nextPt.time - prevPt.time)));
+                currentPos = [
+                    MathUtils.lerp(prevPt.lon, nextPt.lon, t),
+                    MathUtils.lerp(prevPt.lat, nextPt.lat, t)
+                ];
+            }
+
+            const recentPoints = visiblePoints.slice(-20); // Last 20 points for trailing effect
+            const lineCoords = recentPoints.map(p => [p.lon, p.lat]);
+            lineCoords.push(currentPos);
+
+            map.getSource(sourceId).setData({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: lineCoords }
+            });
+
+            marker.setLngLat(currentPos);
+            // Check proximity to other markers
+            let hide = false;
+            state.gpxUnits.forEach((otherUnit, otherId) => {
+                if (otherId !== unitId && otherUnit.marker && otherUnit.marker.getElement().style.display === 'flex') {
+                    const otherPos = otherUnit.marker.getLngLat().toArray();
+                    const dist = MathUtils.haversineDistance(currentPos, otherPos);
+                    if (dist < 0.5) { // 0.5 miles
+                        hide = true;
+                    }
+                }
+            });
+            marker.getElement().style.display = hide ? 'none' : 'flex';
+        } else {
+            marker.getElement().style.display = 'none';
+            map.getSource(sourceId).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+        }
+    });
+}
+        map.on('load', async () => {
             const initialRating = keyframes[0][3] || 'DEFAULT';
             const initialColor = tornadoIntensityColors[initialRating] || tornadoIntensityColors['DEFAULT'];
 
-            map.addSource('damage-image', {
-                type: 'image',
-                url: damageOverlay.url,
-                coordinates: damageOverlay.bounds
-            });
-
-            map.addSource('tornado-track-line', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: keyframes.map(k => k.slice(0, 2)) } } });
+            map.addSource('damage-image', { type: 'image', url: damageOverlay.url, coordinates: damageOverlay.bounds });
+            map.addSource('tornado-track-line', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: smoothedTrack.geometry.coordinates } } });
             map.addLayer({ id: 'tornado-track-layer', type: 'line', source: 'tornado-track-line', paint: { 'line-color': 'rgba(0,0,0,0)', 'line-width': 2, 'line-opacity': 0 } });
-
+            
+            // Re-added the multi-colored line source
             map.addSource('tornado-head-line', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-
-            map.addLayer({
-                id: 'tornado-head-layer',
-                type: 'line',
-                source: 'tornado-head-line',
-                paint: {
-                    'line-width': 4,
-                    'line-color': [
-                        'match',
-                        ['get', 'rating'],
-                        'EF0', tornadoIntensityColors['EF0'],
-                        'EF1', tornadoIntensityColors['EF1'],
-                        'EF2', tornadoIntensityColors['EF2'],
-                        'EF3', tornadoIntensityColors['EF3'],
-                        'EF4', tornadoIntensityColors['EF4'],
-                        'EF5', tornadoIntensityColors['EF5'],
-                        tornadoIntensityColors['DEFAULT']
-                    ]
-                }
-            }, 'road-minor');
-
-            map.addSource('tornado-circle', { type: 'geojson', data: createGeoJSONCircle(keyframes[0], [0]) });
-            map.addLayer({
-                id: 'tornado-circle-stencil',
-                type: 'fill',
-                source: 'tornado-circle',
-                paint: { 'fill-color': initialColor, 'fill-opacity': 0.34 },
-            }, 'road-minor');
-
+            map.addLayer({ id: 'tornado-head-layer', type: 'line', source: 'tornado-head-line', paint: { 'line-width': 8, 'line-color': ['get', 'color'] } }, 'road-minor');
+            
+            map.addSource('tornado-circle', { type: 'geojson', data: GeometryUtils.createGeoJSONCircle(keyframes[0].slice(0, 2), 0) });
+            map.addLayer({ id: 'tornado-circle-fill', type: 'fill', source: 'tornado-circle', paint: { 'fill-color': initialColor, 'fill-opacity': 0.15 } }, 'road-minor');
             map.addLayer({ id: 'tornado-circle-border', type: 'line', source: 'tornado-circle', paint: { 'line-color': initialColor, 'line-width': 8 } }, 'road-minor');
-
-            const swath = createTornadoSwathPolygon(keyframes);
+            
+            // Initial Swath (empty or small)
+            const swath = GeometryUtils.createTornadoSwathPolygon([keyframes[0]]);
             map.addSource('tornado-swath', { type: 'geojson', data: swath });
             map.addLayer({ id: 'tornado-swath-layer', type: 'fill', source: 'tornado-swath', paint: { 'fill-color': initialColor, 'fill-opacity': 0.3 } }, 'tornado-track-layer');
+            
+            map.addLayer(customLayer, 'tornado-circle-fill');
 
-            map.addLayer(customLayer, 'tornado-circle-border');
+            await loadTracks(gpxConfig);
+            await loadTracks(kmlConfig);
 
-            if (showAnimationPlayer) setSlider(0);
-            else animateTornado(0, [keyframes[0]]);
+            setSlider(0);
+            elements.slider.max = keyframes.length - 1;
+            mapLoaded = true;
+            document.getElementById('loading').style.display = 'none';
         });
+
+        // Helper: Time Formatting
+        function formatTime(date) {
+            let hours = date.getHours();
+            let minutes = date.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            return hours + ':' + minutes + ' ' + ampm;
+        }
+
+        function getNearestCity([lon, lat]) {
+            // First check config.cities (local list), then maybe a default list
+            const cityList = cities && cities.length > 0 ? cities : [referenceCity];
+            
+            let minDistance = Infinity;
+            let nearestCity = null;
+
+            cityList.forEach(city => {
+                const dist = MathUtils.haversineDistance([lon, lat], city.coordinates);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestCity = city;
+                }
+            });
+
+            // Fallback to reference city if no other cities found or list empty
+            if (!nearestCity) nearestCity = referenceCity;
+
+            const miles = MathUtils.metersToMiles(minDistance).toFixed(1);
+            return `${miles} mi from ${nearestCity.name}, ${nearestCity.state || ''}`;
+        }
+
+        function updateCommentary(currentDate) {
+            const currentTime = currentDate.getTime();
+            const activeComment = commentary.find(c => {
+                const cTime = new Date(c.time).getTime();
+                return Math.abs(currentTime - cTime) < 2000; 
+            });
+
+            if (activeComment) {
+                elements.commentaryBox.classList.add('visible');
+                const duration = activeComment.duration || defaultCommentaryDuration;
+                state.activeCommentaryEnd = currentTime + duration;
+                // Typewriter effect
+                const text = activeComment.text;
+                elements.commentaryText.textContent = '';
+                let i = 0;
+                const typeInterval = setInterval(() => {
+                    elements.commentaryText.textContent += text[i];
+                    i++;
+                    if (i >= text.length) clearInterval(typeInterval);
+                }, 50);
+            }
+
+            if (state.activeCommentaryEnd > 0 && currentTime > state.activeCommentaryEnd) {
+                elements.commentaryBox.classList.remove('visible');
+                state.activeCommentaryEnd = 0;
+            }
+        }
+
+        function updateHUD([lon, lat, diameter], rating, distanceTraveled, currentTimeMs) {
+            const color = tornadoIntensityColors[rating] || tornadoIntensityColors['DEFAULT'];
+
+            if (state.lastRating !== rating) {
+                elements.hudIntensity.classList.remove('rating-visible');
+                elements.hudIntensity.classList.add('rating-changing');
+                setTimeout(() => {
+                    elements.hudIntensity.textContent = rating;
+                    elements.hudIntensity.style.color = color;
+                    elements.hudIntensity.classList.remove('rating-changing');
+                    elements.hudIntensity.classList.add('rating-visible');
+                }, 200);
+                state.lastRating = rating;
+            }
+
+            // Update wind speed
+            const windSpeed = windSpeedMap[rating] || windSpeedMap['DEFAULT'];
+            elements.hudWindSpeed.textContent = windSpeed + ' mph';
+
+            const currentDate = new Date(currentTimeMs);
+            const currentMinute = currentDate.getMinutes();
+            
+            // Time-flip animation when minute changes
+            if (state.lastMinute !== currentMinute && state.lastMinute !== -1) {
+                elements.hudTime.classList.remove('flip-animation');
+                void elements.hudTime.offsetWidth; // Trigger reflow to restart animation
+                elements.hudTime.classList.add('flip-animation');
+            }
+            state.lastMinute = currentMinute;
+            
+            elements.hudTime.textContent = formatTime(currentDate);
+            elements.hudCoords.textContent = `Lat: ${lat.toFixed(4)} Lon: ${lon.toFixed(4)}`;
+            elements.hudLocation.textContent = getNearestCity([lon, lat]);
+            updateCommentary(currentDate);
+        }
 
         function updateMarkers([lon, lat, diameter]) {
             points.forEach(point => {
-                const distMiles = metersToMiles(haversineDistance([lon, lat], point.coordinates));
+                const distMiles = MathUtils.metersToMiles(MathUtils.haversineDistance([lon, lat], point.coordinates));
                 const shouldShow = point.showWhen === 'any' || distMiles <= point.showWhen;
-                let iconPath = point.icon || 'https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png';
-                if (point.type === 'fatality') iconPath = distMiles <= diameter / 2 ? './images/life-lost.svg' : './images/life-red.svg';
 
-                if (shouldShow && !markers[point.name]) {
-                    const el = document.createElement('div'); el.className = 'custom-marker'; el.style.opacity = '0'; el.style.transition = 'opacity 1s ease';
-                    const img = document.createElement('img'); img.src = iconPath; img.style.width = '30px'; img.style.height = '40px'; img.style.display = 'block'; img.style.margin = '0 auto';
+                if (shouldShow && !state.markers[point.name]) {
+                    const el = document.createElement('div');
+                    el.className = 'custom-marker';
+                    el.style.opacity = '0';
+                    el.style.transition = 'opacity 1s ease';
+                    const img = document.createElement('img');
+                    
+                    // Use life-red.svg for fatality type, otherwise use specified icon
+                    if (point.type === 'fatality') {
+                        img.src = './images/life-red.svg';
+                    } else {
+                        img.src = point.icon || './images/house-white.svg';
+                    }
+                    
+                    img.style.width = '30px';
+                    img.style.height = '40px';
                     el.appendChild(img);
-                    const label = document.createElement('div'); label.textContent = point.name; label.style.textAlign = 'center'; label.style.fontSize = '12px'; label.style.fontWeight = 'bold';
-                    label.style.color = '#222'; label.style.textShadow = '1px 1px 2px white'; label.style.marginTop = '2px'; el.appendChild(label);
                     const marker = new mapboxgl.Marker(el).setLngLat(point.coordinates).addTo(map);
-                    markers[point.name] = marker;
+                    state.markers[point.name] = marker;
                     requestAnimationFrame(() => el.style.opacity = '1');
-                } else if (!shouldShow && markers[point.name]) {
-                    const marker = markers[point.name]; const el = marker.getElement(); el.style.opacity = '0';
-                    setTimeout(() => { marker.remove(); delete markers[point.name] }, 1000);
+                } else if (!shouldShow && state.markers[point.name]) {
+                    const marker = state.markers[point.name];
+                    marker.getElement().style.opacity = '0';
+                    setTimeout(() => { marker.remove(); delete state.markers[point.name]; }, 1000);
                 }
             });
         }
 
-        function updateTornadoFrame([lon, lat, diameter], pathSoFar, rating) {
-            const radius = milesToMeters(diameter) / 2;
+        function updateTornadoFrame([lon, lat, diameter], pathSoFar, rating, currentTimeMs) {
+            const radius = MathUtils.milesToMeters(diameter) / 2;
             const color = tornadoIntensityColors[rating] || tornadoIntensityColors['DEFAULT'];
 
-            map.getSource('tornado-circle').setData(createGeoJSONCircle([lon, lat], radius));
-            map.setPaintProperty('tornado-circle-stencil', 'fill-color', color);
+            map.getSource('tornado-circle').setData(GeometryUtils.createGeoJSONCircle([lon, lat], radius));
             map.setPaintProperty('tornado-circle-border', 'line-color', color);
+            map.setPaintProperty('tornado-circle-fill', 'fill-color', color);
 
-            const fullHistory = pathSoFar.concat([
-                [lon, lat, diameter, rating]
-            ]);
-
+            // --- RE-IMPLEMENTED MULTI-COLORED TRACK LINE ---
+            const fullHistory = pathSoFar.concat([[lon, lat, diameter, rating]]);
             const lineFeatures = [];
             let currentSegment = [];
-            let currentRating = 'DEFAULT';
+            let currentRating = fullHistory[0][3] || 'DEFAULT';
 
-            for (let i = 0; i < fullHistory.length - 1; i++) {
-                const [lon_i, lat_i, diam_i, rate_i_raw] = fullHistory[i];
-                const [lon_j, lat_j, diam_j, rate_j_raw] = fullHistory[i + 1];
+            for (let i = 0; i < fullHistory.length; i++) {
+                const point = fullHistory[i];
+                const ptRating = point[3] || 'DEFAULT';
 
-                const segmentRating = rate_i_raw || 'DEFAULT';
-
-                if (diam_i > 0 && diam_j > 0) {
-                    if (currentSegment.length === 0) {
-                        currentSegment.push([lon_i, lat_i]);
-                        currentRating = segmentRating;
-                    } else if (segmentRating !== currentRating) {
-                        currentSegment.push([lon_i, lat_i]);
-                        if (currentSegment.length > 1) {
-                            lineFeatures.push({
-                                type: 'Feature',
-                                geometry: { type: 'LineString', coordinates: currentSegment },
-                                properties: { rating: currentRating }
-                            });
-                        }
-                        currentSegment = [[lon_i, lat_i]];
-                        currentRating = segmentRating;
-                    }
-                    currentSegment.push([lon_j, lat_j]);
-                } else {
-                    if (currentSegment.length > 1) {
+                if (ptRating !== currentRating) {
+                    // Push previous segment
+                    if (currentSegment.length > 0) {
+                        currentSegment.push(point.slice(0, 2)); // Connect to current point to avoid gaps
                         lineFeatures.push({
                             type: 'Feature',
                             geometry: { type: 'LineString', coordinates: currentSegment },
-                            properties: { rating: currentRating }
+                            properties: { rating: currentRating, color: tornadoIntensityColors[currentRating] }
                         });
                     }
-                    currentSegment = [];
+                    // Start new segment
+                    currentSegment = [point.slice(0, 2)];
+                    currentRating = ptRating;
+                } else {
+                    currentSegment.push(point.slice(0, 2));
                 }
             }
-
+            // Push final segment
             if (currentSegment.length > 1) {
-                lineFeatures.push({
+                 lineFeatures.push({
                     type: 'Feature',
                     geometry: { type: 'LineString', coordinates: currentSegment },
-                    properties: { rating: currentRating }
+                    properties: { rating: currentRating, color: tornadoIntensityColors[currentRating] }
                 });
             }
 
-            map.getSource('tornado-head-line').setData({
-                type: 'FeatureCollection',
-                features: lineFeatures
-            });
-
+            map.getSource('tornado-head-line').setData({ type: 'FeatureCollection', features: lineFeatures });
+            
+            // Swath Update
             const swathPath = fullHistory.map(k => k.slice(0, 3));
-            const partialSwath = createTornadoSwathPolygon(swathPath);
-            map.getSource('tornado-swath').setData(partialSwath);
+            map.getSource('tornado-swath').setData(GeometryUtils.createTornadoSwathPolygon(swathPath));
             map.setPaintProperty('tornado-swath-layer', 'fill-color', color);
 
+            let distanceTraveled = 0;
+            for (let i = 0; i < fullHistory.length - 1; i++) {
+                distanceTraveled += MathUtils.haversineDistance(fullHistory[i].slice(0, 2), fullHistory[i + 1].slice(0, 2));
+            }
+
             updateMarkers([lon, lat, diameter]);
+            updateGPX(currentTimeMs);
+            updateHUD([lon, lat, diameter], rating, distanceTraveled, currentTimeMs);
             map.easeTo({ center: [lon, lat], essential: true });
         }
 
-        let isPlaying = false, animationFrame = null, currentIdx = 0;
-        const slider = document.getElementById('slider'); const sliderValue = document.getElementById('slider-value');
-        slider.max = keyframes.length - 1; slider.value = 0; sliderValue.textContent = '0%';
-
-        function animateTornado(index, pathSoFar) {
-            if (index >= keyframes.length - 1) return;
-            const start = keyframes[index], end = keyframes[index + 1];
-            const rating = start[3] || 'DEFAULT';
-            const dist = haversineDistance(start, end), duration = dist / tornadoSpeed, startTime = performance.now();
-
-            function step(timestamp) {
-                const t = Math.min((timestamp - startTime) / duration, 1);
-                const [lon, lat, diameter] = interpolateCoords(start, end, t);
-                updateTornadoFrame([lon, lat, diameter], pathSoFar, rating);
-
-                if (t < 1) animationFrame = requestAnimationFrame(step);
-                else animateTornado(index + 1, [...pathSoFar, end]);
+        function setSlider(value) {
+            // value is 0 to keyframes.length - 1
+            // Map slider position directly to keyframe times
+            const floorValue = Math.floor(value);
+            const ceilValue = Math.ceil(value);
+            const fraction = value - floorValue;
+            
+            // Get the actual time from keyframeTimes array
+            if (floorValue === ceilValue || value === 0) {
+                // Exact keyframe position
+                state.currentTimeMs = keyframeTimes[Math.max(0, Math.min(floorValue, keyframeTimes.length - 1))];
+            } else {
+                // Interpolate between two keyframe times
+                const floorTime = keyframeTimes[floorValue];
+                const ceilTime = keyframeTimes[ceilValue];
+                state.currentTimeMs = floorTime + fraction * (ceilTime - floorTime);
             }
-            animationFrame = requestAnimationFrame(step);
-        }
-
-        function setSlider(idx) {
-            currentIdx = idx;
-            const [lon, lat, diameter, rating] = keyframes[idx];
-            updateTornadoFrame([lon, lat, diameter], keyframes.slice(0, idx + 1), rating || 'DEFAULT');
-            sliderValue.textContent = Math.round((idx / (keyframes.length - 1)) * 100) + '%';
+            
+            // find the segment
+            let segmentStart = 0;
+            for (let i = 0; i < keyframeTimes.length - 1; i++) {
+                if (state.currentTimeMs >= keyframeTimes[i] && state.currentTimeMs < keyframeTimes[i+1]) {
+                    segmentStart = i;
+                    break;
+                }
+            }
+            if (state.currentTimeMs >= keyframeTimes[keyframeTimes.length - 1]) {
+                segmentStart = keyframeTimes.length - 2;
+            }
+            const startKf = keyframes[segmentStart];
+            const endKf = keyframes[segmentStart + 1];
+            const startTime = keyframeTimes[segmentStart];
+            const endTime = keyframeTimes[segmentStart + 1];
+            const t = (state.currentTimeMs - startTime) / (endTime - startTime);
+            const [lon, lat, diameter] = MathUtils.interpolateCoords(startKf, endKf, t);
+            const rating = startKf[3] || 'DEFAULT';
+            const pathSoFar = keyframes.slice(0, segmentStart + 1);
+            updateTornadoFrame([lon, lat, diameter], pathSoFar, rating, state.currentTimeMs);
+            elements.slider.value = value;
         }
 
         function animateSlider() {
-            if (!isPlaying || currentIdx >= keyframes.length - 1) { if (currentIdx >= keyframes.length - 1) pauseAnimation(); return; }
-            const start = keyframes[currentIdx], end = keyframes[currentIdx + 1];
-  const rating = start[3] || 'DEFAULT';
-            const dist = haversineDistance(start, end), duration = dist / tornadoSpeed, startTime = performance.now();
-
-            function step(timestamp) {
-                if (!isPlaying) return;
-                const t = Math.min((timestamp - startTime) / duration, 1);
-                const [lon, lat, diameter] = interpolateCoords(start, end, t);
-
-                const pathSoFar = keyframes.slice(0, currentIdx + 1);
-
-                updateTornadoFrame(
-                    [lon, lat, diameter],
-                    pathSoFar,
-                    rating
-                );
-
-                slider.value = currentIdx + t;
-                sliderValue.textContent = Math.round(((currentIdx + t) / (keyframes.length - 1)) * 100) + '%';
-                if (t < 1) animationFrame = requestAnimationFrame(step);
-                else { currentIdx++; animateSlider(); }
+            if (!state.isPlaying || state.currentTimeMs >= endDate.getTime()) {
+                if (state.currentTimeMs >= endDate.getTime()) pauseAnimation();
+                return;
             }
-            animationFrame = requestAnimationFrame(step);
+
+            const deltaTime = 50 * tornadoSpeed; // ms per frame, adjusted by speed factor
+            state.currentTimeMs += deltaTime;
+
+            // find the current segment
+            let segmentStart = 0;
+            for (let i = 0; i < keyframeTimes.length - 1; i++) {
+                if (state.currentTimeMs >= keyframeTimes[i] && state.currentTimeMs < keyframeTimes[i+1]) {
+                    segmentStart = i;
+                    break;
+                }
+            }
+            if (state.currentTimeMs >= keyframeTimes[keyframeTimes.length - 1]) {
+                segmentStart = keyframeTimes.length - 2;
+            }
+
+            const startKf = keyframes[segmentStart];
+            const endKf = keyframes[segmentStart + 1];
+            const startTime = keyframeTimes[segmentStart];
+            const endTime = keyframeTimes[segmentStart + 1];
+            const t = (state.currentTimeMs - startTime) / (endTime - startTime);
+            const [lon, lat, diameter] = MathUtils.interpolateCoords(startKf, endKf, t);
+            const rating = startKf[3] || 'DEFAULT';
+            const pathSoFar = keyframes.slice(0, segmentStart + 1);
+
+            updateTornadoFrame([lon, lat, diameter], pathSoFar, rating, state.currentTimeMs);
+
+            // update slider
+            const progress = (state.currentTimeMs - startDate.getTime()) / totalTimeDuration;
+            elements.slider.value = progress * (keyframes.length - 1);
+
+            // Removed requestAnimationFrame for setInterval usage
         }
 
-        const playBtn = document.getElementById('play-btn'); const pauseBtn = document.getElementById('pause-btn');
-        function playAnimation() { isPlaying = true; playBtn.style.display = 'none'; pauseBtn.style.display = 'inline-flex'; animateSlider(); }
-        function pauseAnimation() { isPlaying = false; playBtn.style.display = 'inline-flex'; pauseBtn.style.display = 'none'; if (animationFrame) cancelAnimationFrame(animationFrame); if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); }
-        playBtn.addEventListener('click', playAnimation); pauseBtn.addEventListener('click', pauseAnimation);
-        slider.addEventListener('input', () => { setSlider(parseInt(slider.value, 10)); pauseAnimation(); });
+        function playAnimation() {
+            state.isPlaying = true;
+            elements.playBtn.style.display = 'none';
+            elements.pauseBtn.style.display = 'inline-flex';
+            state.animationFrame = setInterval(animateSlider, 100);
+        }
 
-        const exportBtn = document.getElementById('export-btn'); let mediaRecorder, recordedChunks = [];
+        function pauseAnimation() {
+            state.isPlaying = false;
+            elements.playBtn.style.display = 'inline-flex';
+            elements.pauseBtn.style.display = 'none';
+            if (state.animationFrame) clearInterval(state.animationFrame);
+        }
+        
+        function toggleAnimation() {
+            if(state.isPlaying) pauseAnimation();
+            else playAnimation();
+        }
+
+        function toggleUI() {
+            state.controlsVisible = !state.controlsVisible;
+            if(state.controlsVisible) {
+                elements.sliderContainer.classList.add('show-controls');
+                elements.exportBtn.style.display = 'inline-flex';
+            } else {
+                elements.sliderContainer.classList.remove('show-controls');
+                elements.exportBtn.style.display = 'none';
+            }
+        }
+
+        // --- Event Listeners ---
+        elements.playBtn.addEventListener('click', playAnimation);
+        elements.pauseBtn.addEventListener('click', pauseAnimation);
+        elements.slider.addEventListener('input', () => {
+            const idx = parseFloat(elements.slider.value);
+            setSlider(idx);
+            pauseAnimation();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') { e.preventDefault(); toggleAnimation(); }
+            if (e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); toggleUI(); }
+        });
+
+        let mapLoaded = false;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
         function startRecording() {
-            currentIdx = 0; setSlider(0);
-            const canvas = map.getCanvas(), stream = canvas.captureStream(30);
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            recordedChunks = [];
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data) };
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = 'tornado-animation.webm'; a.click();
-                URL.revokeObjectURL(url);
-            };
-            mediaRecorder.start(); playAnimation();
+            if (isRecording || !mapLoaded) return;
+            
+            const canvas = map.getCanvas();
+            if (!canvas) {
+                console.error('Canvas not available');
+                alert('Canvas not available. Please ensure the map is fully loaded.');
+                return;
+            }
+            
+            // Check if captureStream is supported
+            if (!canvas.captureStream) {
+                console.error('captureStream not supported');
+                alert('Your browser does not support canvas recording. Please try Chrome or Edge.');
+                return;
+            }
+            
+            try {
+                const stream = canvas.captureStream(30);
+                if (!stream) {
+                    throw new Error('Failed to capture canvas stream');
+                }
+                
+                // Check MediaRecorder support
+                const mimeType = 'video/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    console.warn('webm not supported, attempting fallback');
+                }
+                
+                isRecording = true;
+                state.currentTimeMs = startDate.getTime();
+                elements.sliderContainer.classList.remove('show-controls');
+                elements.exportBtn.style.display = 'none';
+                
+                setTimeout(() => {
+                    setSlider(0);
+                    setTimeout(() => {
+                        try {
+                            mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 5000000 });
+                            recordedChunks = [];
+                            
+                            mediaRecorder.ondataavailable = (e) => { 
+                                if (e.data.size > 0) recordedChunks.push(e.data); 
+                            };
+                            
+                            mediaRecorder.onerror = (e) => {
+                                console.error('MediaRecorder error:', e);
+                                isRecording = false;
+                                alert('Recording error: ' + e.error);
+                            };
+                            
+                            mediaRecorder.onstop = () => {
+                                const blob = new Blob(recordedChunks, { type: mimeType });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `tornado-animation-${Date.now()}.webm`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                isRecording = false;
+                                elements.sliderContainer.classList.add('show-controls');
+                                elements.exportBtn.style.display = 'inline-flex';
+                            };
+                            
+                            mediaRecorder.start();
+                            playAnimation();
+                            
+                            const checkCompletion = setInterval(() => {
+                                if (!state.isPlaying && state.currentTimeMs >= endDate.getTime()) {
+                                    clearInterval(checkCompletion);
+                                    setTimeout(() => { 
+                                        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                                            mediaRecorder.stop(); 
+                                        }
+                                    }, 500);
+                                }
+                            }, 100);
+                        } catch (recordError) {
+                            console.error('Failed to start MediaRecorder:', recordError);
+                            isRecording = false;
+                            alert('Failed to start recording: ' + recordError.message);
+                        }
+                    }, 100);
+                }, 100);
+            } catch (e) {
+                console.error('Recording initialization error:', e);
+                alert('Failed to start recording: ' + e.message);
+                isRecording = false;
+            }
         }
-        exportBtn.addEventListener('click', startRecording);
-
+        elements.exportBtn.addEventListener('click', startRecording);        
     </script>
 </body>
-
 </html>
